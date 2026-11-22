@@ -2728,6 +2728,20 @@ WPushButton#PlayDeck[value="0"] {
       image: url(skins:LateNight/palemoon/buttons/btn__beats_later_active.svg) no-repeat center center;
     }
 
+  #BarStartEarlier {
+    image: url(skins:LateNight/palemoon/buttons/btn__bar_start_earlier.svg) no-repeat center center;
+    }
+    #BarStartEarlier[pressed="true"] {
+      image: url(skins:LateNight/palemoon/buttons/btn__bar_start_earlier_active.svg) no-repeat center center;
+    }
+
+  #BarStartLater {
+    image: url(skins:LateNight/palemoon/buttons/btn__bar_start_later.svg) no-repeat center center;
+    }
+    #BarStartLater[pressed="true"] {
+      image: url(skins:LateNight/palemoon/buttons/btn__bar_start_later_active.svg) no-repeat center center;
+    }
+
   #BeatsSlower {
     image: url(skins:LateNight/palemoon/buttons/btn__beats_slower.svg) no-repeat center center;
     }

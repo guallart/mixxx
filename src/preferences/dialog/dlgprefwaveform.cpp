@@ -179,6 +179,10 @@ DlgPrefWaveform::DlgPrefWaveform(
             QOverload<int>::of(&QSpinBox::valueChanged),
             this,
             &DlgPrefWaveform::slotSetBeatGridAlpha);
+    connect(beatsPerBarSpinBox,
+            QOverload<int>::of(&QSpinBox::valueChanged),
+            this,
+            &DlgPrefWaveform::slotSetBeatsPerBar);
     connect(frameRateSlider,
             &QSlider::valueChanged,
             frameRateSpinBox,
@@ -403,6 +407,7 @@ void DlgPrefWaveform::slotUpdate() {
     playMarkerPositionSlider->setValue(static_cast<int>(pFactory->getPlayMarkerPosition() * 100));
     beatGridAlphaSpinBox->setValue(pFactory->getBeatGridAlpha());
     beatGridAlphaSlider->setValue(pFactory->getBeatGridAlpha());
+    beatsPerBarSpinBox->setValue(pFactory->getBeatsPerBar());
 
     untilMarkShowBeatsCheckBox->setChecked(pFactory->getUntilMarkShowBeats());
     untilMarkShowTimeCheckBox->setChecked(pFactory->getUntilMarkShowTime());
@@ -525,6 +530,7 @@ void DlgPrefWaveform::slotResetToDefaults() {
     // Beat grid alpha default is 90
     beatGridAlphaSlider->setValue(90);
     beatGridAlphaSpinBox->setValue(90);
+    beatsPerBarSpinBox->setValue(4);
 
     // 50 (center) is default
     playMarkerPositionSlider->setValue(50);
@@ -835,6 +841,10 @@ void DlgPrefWaveform::slotClearCachedWaveforms() {
     analysisDao.deleteAnalysesByType(dbConnection, AnalysisDao::TYPE_WAVEFORM);
     analysisDao.deleteAnalysesByType(dbConnection, AnalysisDao::TYPE_WAVESUMMARY);
     calculateCachedWaveformDiskUsage();
+}
+
+void DlgPrefWaveform::slotSetBeatsPerBar(int beats) {
+    WaveformWidgetFactory::instance()->setBeatsPerBar(beats);
 }
 
 void DlgPrefWaveform::slotSetBeatGridAlpha(int alpha) {

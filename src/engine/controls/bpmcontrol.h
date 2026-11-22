@@ -151,6 +151,10 @@ class BpmControl : public EngineControl {
     std::unique_ptr<ControlPushButton> m_pTranslateBeatsEarlier;
     std::unique_ptr<ControlPushButton> m_pTranslateBeatsLater;
     std::unique_ptr<ControlPushButton> m_pTranslateBeatsHalf;
+    // Shifts the highlighted bar starts by whole beats, for the current track
+    std::unique_ptr<ControlObject> m_pBarStartOffset;
+    std::unique_ptr<ControlPushButton> m_pBarStartEarlier;
+    std::unique_ptr<ControlPushButton> m_pBarStartLater;
     std::unique_ptr<ControlEncoder> m_pTranslateBeatsMove;
     std::unique_ptr<ControlPushButton> m_pBeatsUndo;
     std::unique_ptr<ControlObject> m_pBeatsUndoPossible;

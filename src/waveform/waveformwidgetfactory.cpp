@@ -146,6 +146,7 @@ WaveformWidgetFactory::WaveformWidgetFactory()
           m_openGlesAvailable(false),
           m_openGLShaderAvailable(false),
           m_beatGridAlpha(90),
+          m_beatsPerBar(4),
           m_vsyncThread(nullptr),
           m_pGuiTick(nullptr),
           m_pVisualsManager(nullptr),
@@ -422,6 +423,8 @@ bool WaveformWidgetFactory::setConfig(UserSettingsPointer config) {
 
     int beatGridAlpha = m_config->getValue(kBeatGridAlpha, m_beatGridAlpha);
     setDisplayBeatGridAlpha(beatGridAlpha);
+    m_beatsPerBar = m_config->getValue(
+            ConfigKey(kWaveformGroup, QStringLiteral("beatsPerBar")), m_beatsPerBar);
 
     WaveformWidgetType::Type type = static_cast<WaveformWidgetType::Type>(
             m_config->getValueString(kWaveformTypeKey).toInt(&ok));
@@ -767,6 +770,13 @@ void WaveformWidgetFactory::setZoomSync(bool sync) {
     double refZoom = m_waveformWidgetHolders[0].m_waveformWidget->getZoom();
     for (const auto& holder : std::as_const(m_waveformWidgetHolders)) {
         holder.m_waveformViewer->setZoom(refZoom);
+    }
+}
+
+void WaveformWidgetFactory::setBeatsPerBar(int beats) {
+    m_beatsPerBar = beats;
+    if (m_config) {
+        m_config->setValue(ConfigKey(kWaveformGroup, QStringLiteral("beatsPerBar")), beats);
     }
 }
 

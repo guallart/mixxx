@@ -117,6 +117,29 @@ BpmControl::BpmControl(const QString& group,
             this,
             &BpmControl::slotTranslateBeatsHalf,
             Qt::DirectConnection);
+    m_pBarStartOffset = std::make_unique<ControlObject>(ConfigKey(group, "bar_start_offset"));
+    m_pBarStartEarlier = std::make_unique<ControlPushButton>(
+            ConfigKey(group, "bar_start_earlier"), false);
+    m_pBarStartEarlier->setKbdRepeatable(true);
+    connect(m_pBarStartEarlier.get(),
+            &ControlObject::valueChanged,
+            this,
+            [this](double value) {
+                if (value > 0.0) {
+                    m_pBarStartOffset->set(m_pBarStartOffset->get() - 1);
+                }
+            });
+    m_pBarStartLater = std::make_unique<ControlPushButton>(
+            ConfigKey(group, "bar_start_later"), false);
+    m_pBarStartLater->setKbdRepeatable(true);
+    connect(m_pBarStartLater.get(),
+            &ControlObject::valueChanged,
+            this,
+            [this](double value) {
+                if (value > 0.0) {
+                    m_pBarStartOffset->set(m_pBarStartOffset->get() + 1);
+                }
+            });
     m_pTranslateBeatsMove = std::make_unique<ControlEncoder>(
             ConfigKey(group, "beats_translate_move"), false);
     connect(m_pTranslateBeatsMove.get(),
@@ -1171,6 +1194,8 @@ void BpmControl::slotUpdateRateSlider(double value) {
 
 // called from an engine worker thread
 void BpmControl::trackLoaded(TrackPointer pNewTrack) {
+    // The bar start shift is specific to a track
+    m_pBarStartOffset->set(0.0);
     mixxx::BeatsPointer pBeats;
     if (pNewTrack) {
         pBeats = pNewTrack->getBeats();

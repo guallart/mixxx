@@ -2087,6 +2087,12 @@ WPushButton#BpmLockToggle[value="1"] {
     #BeatsFaster {
       image: url(skins:LateNight/classic/buttons/btn__beats_faster.svg) no-repeat center center;
     }
+    #BarStartEarlier {
+      image: url(skins:LateNight/classic/buttons/btn__bar_start_earlier.svg) no-repeat center center;
+    }
+    #BarStartLater {
+      image: url(skins:LateNight/classic/buttons/btn__bar_start_later.svg) no-repeat center center;
+    }
     #HotcuesEarlier {
       image: url(skins:LateNight/classic/buttons/btn__beats_hotcues_earlier.svg) no-repeat center center;
     }
