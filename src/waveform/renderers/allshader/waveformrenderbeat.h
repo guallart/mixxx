@@ -1,11 +1,13 @@
 #pragma once
 
 #include <QColor>
+#include <memory>
 
 #include "rendergraph/geometrynode.h"
 #include "util/class.h"
 #include "waveform/renderers/waveformrendererabstract.h"
 
+class ControlProxy;
 class QDomNode;
 class SkinContext;
 
@@ -39,6 +41,7 @@ class allshader::WaveformRenderBeat final
   private:
     QColor m_color;
     bool m_isSlipRenderer;
+    std::unique_ptr<ControlProxy> m_pBarStartOffset;
 
     bool preprocessInner();
 

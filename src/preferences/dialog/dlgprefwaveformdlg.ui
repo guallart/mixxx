@@ -87,6 +87,36 @@ Select from different types of displays for the waveform, which differ primarily
       </layout>
      </item>
 
+     <item row="3" column="0">
+      <widget class="QLabel" name="beatsPerBarLabel">
+       <property name="text">
+        <string>Highlight bar start every</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1" colspan="4">
+      <layout class="QHBoxLayout" name="barHighlightLayout">
+       <item>
+         <widget class="QSpinBox" name="beatsPerBarSpinBox">
+          <property name="toolTip">
+           <string>Draw a thicker beat grid line every N beats, counted from the first beat of the grid. 0 disables the highlight.</string>
+          </property>
+          <property name="specialValueText">
+           <string>Off</string>
+          </property>
+          <property name="suffix">
+           <string> beats</string>
+          </property>
+          <property name="maximum">
+           <number>16</number>
+          </property>
+          <property name="value">
+           <number>4</number>
+          </property>
+         </widget>
+       </item>
+      </layout>
+     </item>
      <item row="4" column="0">
       <widget class="QLabel" name="frameRateLabel">
        <property name="text">

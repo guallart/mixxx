@@ -440,6 +440,16 @@ void Tooltips::addStandardTooltips() {
             << tr("Set the desired tempo in BPM. If the track currently has no BPM detected, "
                   "set the desired tempo in percent.");
 
+    add("bar_start_earlier")
+            << tr("Bar Start Earlier")
+            << tr("Moves the highlighted bar starts one beat earlier for this track. "
+                  "Use it if the bars are not detected correctly.");
+
+    add("bar_start_later")
+            << tr("Bar Start Later")
+            << tr("Moves the highlighted bar starts one beat later for this track. "
+                  "Use it if the bars are not detected correctly.");
+
     add("beats_adjust_slower")
             << tr("Adjust BPM Down")
             << tr("When tapped, adjusts the average BPM down by a small amount.");

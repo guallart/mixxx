@@ -1,12 +1,16 @@
 #include "waveform/renderers/allshader/waveformrenderbeat.h"
 
 #include <QDomNode>
+#include <QVector4D>
 
+#include <algorithm>
+
+#include "control/controlproxy.h"
 #include "engine/engine.h"
 #include "moc_waveformrenderbeat.cpp"
 #include "rendergraph/geometry.h"
-#include "rendergraph/material/unicolormaterial.h"
-#include "rendergraph/vertexupdaters/vertexupdater.h"
+#include "rendergraph/material/rgbamaterial.h"
+#include "rendergraph/vertexupdaters/rgbavertexupdater.h"
 #include "skin/legacy/skincontext.h"
 #include "track/track.h"
 #include "waveform/renderers/waveformwidgetrenderer.h"
@@ -22,7 +26,7 @@ WaveformRenderBeat::WaveformRenderBeat(WaveformWidgetRenderer* waveformWidget,
         ::WaveformRendererAbstract::PositionSource type)
         : ::WaveformRendererAbstract(waveformWidget),
           m_isSlipRenderer(type == ::WaveformRendererAbstract::Slip) {
-    initForRectangles<UniColorMaterial>(0);
+    initForRectangles<RGBAMaterial>(0);
     setUsePreprocess(true);
 }
 
@@ -106,24 +110,84 @@ bool WaveformRenderBeat::preprocessInner() {
     // Note that we could also use
     //   int numBearsInRange = trackBeats->numBeatsInRange(startPosition, endPosition);
     // for this, but there have been reports of that method failing with a DEBUG_ASSERT.
+    // Beats that start a bar are drawn as thicker lines.
+    const int beatsPerBar = WaveformWidgetFactory::isCreated()
+            ? WaveformWidgetFactory::instance()->getBeatsPerBar()
+            : 0;
+    if (!m_pBarStartOffset) {
+        m_pBarStartOffset = std::make_unique<ControlProxy>(
+                m_waveformRenderer->getGroup(), QStringLiteral("bar_start_offset"));
+    }
+    const int barStartOffset = static_cast<int>(m_pBarStartOffset->get());
+    const auto firstBeat = trackBeats->cbegin();
+    auto isBarStartIndex = [beatsPerBar, barStartOffset](ptrdiff_t index) {
+        if (beatsPerBar <= 0) {
+            return false;
+        }
+        // Shift the bars, keeping the modulo non-negative
+        return ((index - barStartOffset) % beatsPerBar + beatsPerBar) % beatsPerBar == 0;
+    };
+
     int numBeatsInRange = 0;
+    int numBarStartsInRange = 0;
     for (auto it = trackBeats->iteratorFrom(startPosition);
             it != trackBeats->cend() && *it <= endPosition;
             ++it) {
         numBeatsInRange++;
+        if (isBarStartIndex(it - firstBeat)) {
+            numBarStartsInRange++;
+        }
     }
 
     const int numBoxesPerBeat = (m_isSlipRenderer && splitStemTracks)
             ? mixxx::kMaxSupportedStems
             : 1;
-    const int reserved = numBeatsInRange * numVerticesPerLine * numBoxesPerBeat;
+    // Bar starts additionally get two triangles (top and bottom).
+    const int numVerticesPerBarMarker = 6;
+    const int reserved = numBoxesPerBeat *
+            (numBeatsInRange * numVerticesPerLine +
+                    numBarStartsInRange * numVerticesPerBarMarker);
     geometry().allocate(reserved);
 
-    VertexUpdater vertexUpdater{geometry().vertexDataAs<Geometry::Point2D>()};
+    RGBAVertexUpdater vertexUpdater{geometry().vertexDataAs<Geometry::RGBAColoredPoint2D>()};
 
     const float boxBreadth = splitStemTracks
             ? rendererBreadth / static_cast<float>(mixxx::kMaxSupportedStems)
             : rendererBreadth;
+
+    const float r = static_cast<float>(m_color.redF());
+    const float g = static_cast<float>(m_color.greenF());
+    const float b = static_cast<float>(m_color.blueF());
+    const float a = static_cast<float>(m_color.alphaF());
+    const QVector4D normalColor{r, g, b, a};
+    // Reddish color for bar starts
+    const QVector4D barColor{0.9f, 0.15f, 0.15f, std::max(a, 0.9f)};
+
+    constexpr float kBarLineWidth = 3.f;
+    constexpr float kTriHalfWidth = 6.f;
+    constexpr float kTriHeight = 8.f;
+
+    int usedVertices = 0;
+    auto addLine = [&](float x1, float y1, float x2, float y2, bool isBarStart) {
+        if (!isBarStart) {
+            vertexUpdater.addRectangle({x1, y1}, {x2, y2}, normalColor);
+            usedVertices += numVerticesPerLine;
+            return;
+        }
+        vertexUpdater.addRectangle({x1, y1}, {x2, y2}, barColor);
+        const float cx = (x1 + x2) / 2.f;
+        // Top triangle, pointing down
+        vertexUpdater.addTriangle({cx - kTriHalfWidth, y1},
+                {cx + kTriHalfWidth, y1},
+                {cx, y1 + kTriHeight},
+                barColor);
+        // Bottom triangle, pointing up
+        vertexUpdater.addTriangle({cx - kTriHalfWidth, y2},
+                {cx + kTriHalfWidth, y2},
+                {cx, y2 - kTriHeight},
+                barColor);
+        usedVertices += numVerticesPerLine + numVerticesPerBarMarker;
+    };
 
     for (auto it = trackBeats->iteratorFrom(startPosition);
             it != trackBeats->cend() && *it <= endPosition;
@@ -135,26 +199,24 @@ bool WaveformRenderBeat::preprocessInner() {
 
         xBeatPoint = qRound(xBeatPoint * devicePixelRatio) / devicePixelRatio;
 
-        const float x1 = static_cast<float>(xBeatPoint);
-        const float x2 = x1 + 1.f;
+        const bool isBarStart = isBarStartIndex(it - firstBeat);
+        const float x1 = static_cast<float>(xBeatPoint) - (isBarStart ? 1.f : 0.f);
+        const float x2 = x1 + (isBarStart ? kBarLineWidth : 1.f);
 
         if (m_isSlipRenderer && splitStemTracks) {
             for (int stemIdx = 0; stemIdx < mixxx::kMaxSupportedStems; ++stemIdx) {
                 const float posy1 = stemIdx * boxBreadth;
                 const float posy2 = posy1 + boxBreadth / 2.f;
-                vertexUpdater.addRectangle({x1, posy1}, {x2, posy2});
+                addLine(x1, posy1, x2, posy2, isBarStart);
             }
         } else {
-            vertexUpdater.addRectangle({x1, 0.f},
-                    {x2, m_isSlipRenderer ? rendererBreadth / 2 : rendererBreadth});
+            addLine(x1, 0.f, x2, m_isSlipRenderer ? rendererBreadth / 2 : rendererBreadth, isBarStart);
         }
     }
     markDirtyGeometry();
-
-    DEBUG_ASSERT(reserved == vertexUpdater.index());
-
-    material().setUniform(1, m_color);
     markDirtyMaterial();
+
+    DEBUG_ASSERT(reserved == usedVertices);
 
     return true;
 }
