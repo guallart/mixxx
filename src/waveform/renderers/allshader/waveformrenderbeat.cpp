@@ -1,6 +1,7 @@
 #include "waveform/renderers/allshader/waveformrenderbeat.h"
 
 #include <QDomNode>
+#include <QVector2D>
 #include <QVector4D>
 
 #include <algorithm>
@@ -120,12 +121,23 @@ bool WaveformRenderBeat::preprocessInner() {
     }
     const int barStartOffset = static_cast<int>(m_pBarStartOffset->get());
     const auto firstBeat = trackBeats->cbegin();
-    auto isBarStartIndex = [beatsPerBar, barStartOffset](ptrdiff_t index) {
+    // Every 4th bar starts a phrase, which gets a distinct marker.
+    constexpr ptrdiff_t kBarsPerPhrase = 4;
+    // Returns 0 for a regular beat, 1 for a bar start and 2 for a phrase start.
+    auto markerLevel = [beatsPerBar, barStartOffset](ptrdiff_t index) {
         if (beatsPerBar <= 0) {
-            return false;
+            return 0;
         }
         // Shift the bars, keeping the modulo non-negative
-        return ((index - barStartOffset) % beatsPerBar + beatsPerBar) % beatsPerBar == 0;
+        const ptrdiff_t shifted = index - barStartOffset;
+        if ((shifted % beatsPerBar + beatsPerBar) % beatsPerBar != 0) {
+            return 0;
+        }
+        const ptrdiff_t barNumber = shifted / beatsPerBar;
+        return ((barNumber % kBarsPerPhrase + kBarsPerPhrase) % kBarsPerPhrase == 0) ? 2 : 1;
+    };
+    auto isBarStartIndex = [&markerLevel](ptrdiff_t index) {
+        return markerLevel(index) > 0;
     };
 
     int numBeatsInRange = 0;
@@ -142,8 +154,9 @@ bool WaveformRenderBeat::preprocessInner() {
     const int numBoxesPerBeat = (m_isSlipRenderer && splitStemTracks)
             ? mixxx::kMaxSupportedStems
             : 1;
-    // Bar starts additionally get two triangles (top and bottom).
-    const int numVerticesPerBarMarker = 6;
+    // Bar starts additionally get a soft glow (1 rectangle) and two small
+    // caps (top and bottom), i.e. 3 rectangles.
+    const int numVerticesPerBarMarker = 18;
     const int reserved = numBoxesPerBeat *
             (numBeatsInRange * numVerticesPerLine +
                     numBarStartsInRange * numVerticesPerBarMarker);
@@ -160,32 +173,72 @@ bool WaveformRenderBeat::preprocessInner() {
     const float b = static_cast<float>(m_color.blueF());
     const float a = static_cast<float>(m_color.alphaF());
     const QVector4D normalColor{r, g, b, a};
-    // Reddish color for bar starts
-    const QVector4D barColor{0.9f, 0.15f, 0.15f, std::max(a, 0.9f)};
+    // Modern coral red for bar starts, with a translucent glow behind the line
+    const QVector4D barColor{1.0f, 0.30f, 0.34f, std::max(a, 0.95f)};
+    const QVector4D barGlowColor{1.0f, 0.30f, 0.34f, 0.25f};
+    // Electric violet for phrase starts (every 4 bars), clearly distinct from
+    // the coral bar markers and from typical waveform colors
+    const QVector4D phraseColor{0.62f, 0.36f, 1.0f, std::max(a, 0.98f)};
+    const QVector4D phraseGlowColor{0.62f, 0.36f, 1.0f, 0.35f};
 
-    constexpr float kBarLineWidth = 3.f;
-    constexpr float kTriHalfWidth = 6.f;
-    constexpr float kTriHeight = 8.f;
+    constexpr float kBarLineWidth = 2.f;
+    constexpr float kGlowHalfWidth = 3.f;
+    constexpr float kCapHalfWidth = 5.f;
+    constexpr float kCapHeight = 3.f;
+    constexpr float kPhraseLineWidth = 3.f;
+    constexpr float kPhraseGlowHalfWidth = 5.f;
+    // Phrase markers end in diamonds instead of flat caps
+    constexpr float kPhraseDiamondHalfSize = 7.f;
 
     int usedVertices = 0;
-    auto addLine = [&](float x1, float y1, float x2, float y2, bool isBarStart) {
-        if (!isBarStart) {
+    auto addLine = [&](float x1, float y1, float x2, float y2, int level) {
+        if (level == 0) {
             vertexUpdater.addRectangle({x1, y1}, {x2, y2}, normalColor);
             usedVertices += numVerticesPerLine;
             return;
         }
-        vertexUpdater.addRectangle({x1, y1}, {x2, y2}, barColor);
+        const bool isPhrase = level == 2;
+        const QVector4D& color = isPhrase ? phraseColor : barColor;
+        const QVector4D& glowColor = isPhrase ? phraseGlowColor : barGlowColor;
+        const float glowHalfWidth = isPhrase ? kPhraseGlowHalfWidth : kGlowHalfWidth;
+        const float capHalfWidth = kCapHalfWidth;
+        const float capHeight = kCapHeight;
         const float cx = (x1 + x2) / 2.f;
-        // Top triangle, pointing down
-        vertexUpdater.addTriangle({cx - kTriHalfWidth, y1},
-                {cx + kTriHalfWidth, y1},
-                {cx, y1 + kTriHeight},
-                barColor);
-        // Bottom triangle, pointing up
-        vertexUpdater.addTriangle({cx - kTriHalfWidth, y2},
-                {cx + kTriHalfWidth, y2},
-                {cx, y2 - kTriHeight},
-                barColor);
+        // Soft glow behind the line
+        vertexUpdater.addRectangle({cx - glowHalfWidth, y1},
+                {cx + glowHalfWidth, y2},
+                glowColor);
+        // The marker line itself
+        vertexUpdater.addRectangle({x1, y1}, {x2, y2}, color);
+        if (isPhrase) {
+            // Diamonds (2 triangles each) at both ends
+            auto addDiamond = [&](float centerY) {
+                const float h = kPhraseDiamondHalfSize;
+                const QVector2D left{cx - h, centerY};
+                const QVector2D right{cx + h, centerY};
+                const QVector2D top{cx, centerY - h};
+                const QVector2D bottom{cx, centerY + h};
+                vertexUpdater.addTriangle({left.x(), left.y()},
+                        {right.x(), right.y()},
+                        {top.x(), top.y()},
+                        color);
+                vertexUpdater.addTriangle({left.x(), left.y()},
+                        {right.x(), right.y()},
+                        {bottom.x(), bottom.y()},
+                        color);
+            };
+            addDiamond(y1 + kPhraseDiamondHalfSize);
+            addDiamond(y2 - kPhraseDiamondHalfSize);
+        } else {
+            // Top cap
+            vertexUpdater.addRectangle({cx - capHalfWidth, y1},
+                    {cx + capHalfWidth, y1 + capHeight},
+                    color);
+            // Bottom cap
+            vertexUpdater.addRectangle({cx - capHalfWidth, y2 - capHeight},
+                    {cx + capHalfWidth, y2},
+                    color);
+        }
         usedVertices += numVerticesPerLine + numVerticesPerBarMarker;
     };
 
@@ -199,18 +252,21 @@ bool WaveformRenderBeat::preprocessInner() {
 
         xBeatPoint = qRound(xBeatPoint * devicePixelRatio) / devicePixelRatio;
 
-        const bool isBarStart = isBarStartIndex(it - firstBeat);
-        const float x1 = static_cast<float>(xBeatPoint) - (isBarStart ? 1.f : 0.f);
-        const float x2 = x1 + (isBarStart ? kBarLineWidth : 1.f);
+        const int level = markerLevel(it - firstBeat);
+        const float lineWidth = level == 2 ? kPhraseLineWidth
+                : level == 1               ? kBarLineWidth
+                                           : 1.f;
+        const float x1 = static_cast<float>(xBeatPoint) - (level > 0 ? 1.f : 0.f);
+        const float x2 = x1 + lineWidth;
 
         if (m_isSlipRenderer && splitStemTracks) {
             for (int stemIdx = 0; stemIdx < mixxx::kMaxSupportedStems; ++stemIdx) {
                 const float posy1 = stemIdx * boxBreadth;
                 const float posy2 = posy1 + boxBreadth / 2.f;
-                addLine(x1, posy1, x2, posy2, isBarStart);
+                addLine(x1, posy1, x2, posy2, level);
             }
         } else {
-            addLine(x1, 0.f, x2, m_isSlipRenderer ? rendererBreadth / 2 : rendererBreadth, isBarStart);
+            addLine(x1, 0.f, x2, m_isSlipRenderer ? rendererBreadth / 2 : rendererBreadth, level);
         }
     }
     markDirtyGeometry();
